@@ -1,0 +1,35 @@
+{
+  "name": "twitch-keyforge-data-bot",
+  "version": "1.0.0",
+  "description": "Twitch bot to lookup data for KeyForge",
+  "main": "index.js",
+  "scripts": {
+    "debug": "nodemon index.js",
+    "start": "node index.js"
+  },
+  "keywords": [
+    "twitch",
+    "bot",
+    "data",
+    "lookup",
+    "keyforge"
+  ],
+  "author": "SkyJedi",
+  "license": "GPL-3.0",
+  "dependencies": {
+    "axios": "^0.18.1",
+    "firebase": "^7.2.2",
+    "firebase-admin": "^8.6.1",
+    "lodash": "^4.17.15",
+    "nodemon": "^1.19.1",
+    "tmi.js": "^1.4.5",
+    "uuid": "latest"
+  },
+  "nodemonConfig": {
+    "ignore": [
+      "card_images/",
+      "data/"
+    ]
+  },
+  "devDependencies": {}
+}
