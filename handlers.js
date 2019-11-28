@@ -8,7 +8,7 @@ const knownCommands = functions;
 const onMessage = (target, context, msg, self) => {
 	if (self) return; // Ignore messages from the bot
 
-	const uuid = /[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}/;
+	const uuid = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/;
 
 	if (msg.match(uuid)) msg = `${prefix}deck ${msg.match(uuid)[0]}`;
 
@@ -29,6 +29,7 @@ const onMessage = (target, context, msg, self) => {
 			break;
 		case 'd':
 			commandName = 'deck';
+			params = [params.join(' ')];
 			break;
 		case 'rh':
 		case 'randomhand':
