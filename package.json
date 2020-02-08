@@ -1,6 +1,6 @@
 {
   "name": "twitch-keyforge-data-bot",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Twitch bot to lookup data for KeyForge",
   "main": "index.js",
   "scripts": {
@@ -20,6 +20,7 @@
     "axios": "^0.18.1",
     "firebase": "^7.2.2",
     "firebase-admin": "^8.6.1",
+    "fuse.js": "^3.4.6",
     "lodash": "^4.17.15",
     "nodemon": "^1.19.1",
     "tmi.js": "^1.4.5",
@@ -30,6 +31,5 @@
       "card_images/",
       "data/"
     ]
-  },
-  "devDependencies": {}
+  }
 }

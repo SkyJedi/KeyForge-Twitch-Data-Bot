@@ -15,3 +15,4 @@ exports.rule = require('./rule').rule;
 exports.faq = require('./faq').faq;
 exports.timingChart = require('./timingChart').timingChart;
 exports.randomHand = require('./randomHand').randomHand;
+exports.weirdo = require('./weirdo').weirdo;

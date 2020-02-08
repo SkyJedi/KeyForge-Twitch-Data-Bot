@@ -1,18 +1,17 @@
 const axios = require('axios');
-const {db} = require('./firestore');
+const Fuse = require('fuse.js');
+const { db } = require('./firestore');
 const uuid = require('uuid/v4');
-const {get, sortBy, round, filter, findIndex} = require('lodash');
-const faqs = require('../card_data/faq');
-const cards = require('../card_data/');
-const {deckSearchAPI, dokAPI, dokKey, bitlyKey} = require('../config');
-const {sets, langs, houses} = require('../card_data');
+const { get, sortBy, round, filter, findIndex, shuffle } = require('lodash');
+const faq = require('../card_data/faq');
+const { deckSearchAPI, dokAPI, dokKey, bitlyKey } = require('../config');
+const { sets, langs, houses } = require('../card_data');
 const deckIdRegex = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/;
 
 const fetchDeck = (params) => new Promise((resolve, reject) => {
     const data = params.map(param => deckIdRegex.test(param) ? fetchDeckId(param.match(deckIdRegex)[0]) : fetchDeckNameMV(param));
     Promise.all(data).then(data => resolve(data)).catch(() => reject());
 });
-
 const fetchDeckId = (id) => new Promise((resolve, reject) => {
     db.collection('decks').doc(id).get()
         .then(doc => {
@@ -107,9 +106,7 @@ const fetchMavCard = (name, house) => new Promise((resolve, reject) => {
     }).catch(() => reject());
 });
 const fetchDeckWithCard = (cardId) => new Promise((resolve, reject) => {
-    db.collection('decks').limit(10)
-        .where('cards', 'array-contains', cardId)
-        .get().then(snapshot => {
+    db.collection('decks').limit(10).where('cards', 'array-contains', cardId).get().then(snapshot => {
         if(snapshot.size > 0) {
             let deck = [];
             snapshot.forEach(doc => deck.push(doc.data()));
@@ -167,24 +164,47 @@ const fetchDoK = (deckID) => {
     });
 };
 
-
 const fetchCard = (search, flags) => {
     const set = getFlagSet(flags),
         lang = getFlagLang(flags);
-    let final;
-    final = cards[lang].find(card => card.card_title.toLowerCase() === search && (set ? card.expansion === set : true));
-    if (final) return final;
-    final = cards[lang].find(card => card.card_title.toLowerCase().startsWith(search) && (set ? card.expansion === set : true));
-    if (final) return final;
-    final = cards[lang].find(card => card.card_title.toLowerCase().endsWith(search) && (set ? card.expansion === set : true));
-    if (final) return final;
-    final = cards[lang].find(card => card.card_number === search && (set ? card.expansion === set : true));
-    if (final) return final;
-    final = cards[lang].find(card => card.card_title.toLowerCase().replace(/['"’`“”\d]/g, '').includes(search.replace(/['"’`“”\d]/g, '')) && (set ? card.expansion === set : true));
-    return final;
+    const options = {
+        shouldSort: true,
+        tokenize: true,
+        matchAllTokens: true,
+        threshold: 0.2,
+        keys: [{
+            name: 'card_number',
+            weight: 0.3
+        }, {
+            name: 'card_title',
+            weight: 0.7
+        }],
+    };
+    const cards = (set ? require(`../card_data/${lang}/${set}`) : require(`../card_data/`)[lang]);
+    const fuse = new Fuse(cards, options);
+    const final = fuse.search(search);
+    return get(final, '[0]');
 };
-const fetchFAQ = (params) => {
-    return faqs.find(x => params.every(y => x.question.toLowerCase().includes(y.toLowerCase())));
+const fetchFAQ = (text) => {
+    const options = {
+        shouldSort: true,
+        tokenize: true,
+        matchAllTokens: true,
+        includeScore: true,
+        threshold: 0.3,
+        keys: [
+            { name: 'question', weight: 0.6 },
+            { name: 'answer', weight: 0.4 },
+        ],
+    };
+    const fuse = new Fuse(faq, options);
+    let results = fuse.search(text);
+    results = sortBy(results.filter(x => x.score < 0.6), 'score');
+    return results.map(item => item.item)[0];
+};
+const fetchReprints = (card) => {
+    const cards = require(`../card_data/`)['en'];
+    return cards.filter(x => x.card_title === card.card_title);
 };
 
 const sasStarRating = (x) => {
@@ -216,7 +236,12 @@ const sasStarRating = (x) => {
     }
 };
 
-
+const getSet = (number) => get(sets.filter(set => number === set.set_number), '[0].flag', 'ERROR');
+const getCardLink = (card) => {
+    const AllCards = require(`../card_data/en/${card.expansion}`);
+    card = AllCards.find(x => x.card_number === card.card_number);
+    return encodeURI(`https://archonarcana.com/${card.card_title.replace(' ', '_').replace(/[\[\]']+/g, '')}?powered_by=archonMatrixDiscord`);
+};
 const getFlagSet = (flags) => get(filter(sets, set => flags.includes(set.flag.toLowerCase())), '[0].set_number');
 const getFlagHouse = (flags) => houses[filter(Object.keys(houses), house => flags.includes(house))];
 const getFlagLang = (flags) => get(filter(flags, flag => langs.includes(flag)), '[0]', 'en');
@@ -225,14 +250,12 @@ const getFlagNumber = (flags, defaultNumber = 0) => +(get(filter(flags, flag => 
 const shortenURL = (url) => {
     return new Promise(resolve => {
         axios.post('https://api-ssl.bitly.com/v4/shorten',
-            {long_url: url, domain: 'skyj.io'}, bitlyKey)
+            { long_url: url, domain: 'skyj.io' }, bitlyKey)
             .then(response => resolve(get(response, 'data.id', url)))
             .catch(() => resolve(''));
     });
 };
-
 const rarityFix = rarity => rarity === 'FIXED' || rarity === 'Variant' ? 'Special' : rarity;
-
 const format = (text) => {
     text = text.replace(/<I>/gi, "");
     text = text.replace(/<B>/gi, "");
@@ -240,13 +263,19 @@ const format = (text) => {
 };
 
 exports.fetchDeck = fetchDeck;
+exports.fetchDeckWithCard = fetchDeckWithCard;
+exports.fetchMavCard = fetchMavCard;
 exports.fetchCard = fetchCard;
 exports.fetchDoK = fetchDoK;
 exports.fetchFAQ = fetchFAQ;
 exports.fetchUnknownCard = fetchUnknownCard;
 exports.fetchRandomDecks = fetchRandomDecks;
+exports.fetchReprints = fetchReprints;
+exports.getSet = getSet;
+exports.getCardLink = getCardLink;
 exports.getFlagLang = getFlagLang;
 exports.getFlagSet = getFlagSet;
+exports.getFlagHouse = getFlagHouse;
 exports.getFlagNumber = getFlagNumber;
 exports.shortenURL = shortenURL;
 exports.rarityFix = rarityFix;
