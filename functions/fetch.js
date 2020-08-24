@@ -1,8 +1,8 @@
 const axios = require('axios');
 const Fuse = require('fuse.js');
 const { db } = require('./firestore');
-const uuid = require('uuid/v4');
-const { get, sortBy, round, filter, findIndex, shuffle } = require('lodash');
+const { v4: uuid } = require('uuid');
+const { get, sortBy, round, filter, findIndex, shuffle, uniqBy } = require('lodash');
 const faq = require('../card_data/faq');
 const { deckSearchAPI, dokAPI, dokKey, bitlyKey } = require('../config');
 const { sets, langs, houses } = require('../card_data');
@@ -202,9 +202,10 @@ const fetchFAQ = (text) => {
     results = sortBy(results.filter(x => x.score < 0.6), 'score');
     return results.map(item => item.item)[0];
 };
-const fetchReprints = (card) => {
-    const cards = require(`../card_data/`)['en'];
-    return cards.filter(x => x.card_title === card.card_title);
+const fetchReprints = (card, flags) => {
+    const lang = getFlagLang(flags);
+    const cards = require(`../card_data/`)[lang];
+    return uniqBy(cards.filter(x => x.card_title === card.card_title), 'card_number');
 };
 
 const sasStarRating = (x) => {

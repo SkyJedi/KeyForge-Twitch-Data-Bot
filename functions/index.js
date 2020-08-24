@@ -1,8 +1,4 @@
-const {random, nth} = require('lodash');
 const client = require('../index');
-const comebacks = require('../comebacks');
-
-exports.comeback = (target, context) => client.sendMessage(target, context, nth(comebacks, random(comebacks.length-1)));
 
 exports.bestkey = (target, context) => client.sendMessage(target, context, `The correct answer is Blue Key`);
 
