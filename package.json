@@ -21,7 +21,7 @@
     "firebase": "^7.15.1",
     "firebase-admin": "^8.6.1",
     "fuse.js": "^3.4.6",
-    "lodash": "^4.17.15",
+    "lodash": "^4.17.19",
     "nodemon": "^1.19.1",
     "tmi.js": "^1.4.5",
     "uuid": "latest"
