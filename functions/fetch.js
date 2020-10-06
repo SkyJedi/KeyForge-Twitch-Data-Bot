@@ -1,7 +1,7 @@
 const axios = require('axios');
 const Fuse = require('fuse.js');
 const { db } = require('./firestore');
-const { v4: uuid } = require('uuid');
+const uuid = require('uuid').v4;
 const { get, sortBy, round, filter, findIndex, shuffle, uniqBy } = require('lodash');
 const faq = require('../card_data/faq');
 const { deckSearchAPI, dokAPI, dokKey, bitlyKey } = require('../config');
@@ -142,10 +142,10 @@ const fetchDoK = (deckID) => {
             .then(response => {
                 if(response.data) {
                     const {
-                            amberControl: A, expectedAmber: E,
-                            artifactControl: R, creatureControl: C,
-                            efficiency: F, disruption: D, effectivePower: P,
-                            sasRating, sasPercentile, aercScore
+                            amberControl: A = 0, expectedAmber: E = 0,
+                            artifactControl: R = 0, creatureControl: C = 0,
+                            efficiency: F = 0, disruption: D = 0, effectivePower: P = 0,
+                            sasRating = 0, sasPercentile = 0, aercScore = 0
                         } = response.data.deck,
                         sas = `${round(sasRating, 2)} SAS • ${round(aercScore, 2)} AERC`,
                         deckAERC = `A: ${round(A, 2)} • E: ${round(E, 2)} • R: ${round(R, 2)} • C: ${round(C, 2)} • F: ${round(F, 2)} • D: ${round(D, 2)} • P: ${round(P, 2)}`,

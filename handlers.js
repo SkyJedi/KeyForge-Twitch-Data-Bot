@@ -35,6 +35,10 @@ const onMessage = (target, context, msg, self) => {
 		case 'randomhand':
 			commandName = 'randomHand';
 			break;
+		case 'poly':
+		case 'r':
+			commandName = 'roll';
+			break;
 		case 'time':
 		case 'timing':
 		case 'chart':
