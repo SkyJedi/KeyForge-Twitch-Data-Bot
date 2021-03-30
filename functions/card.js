@@ -1,13 +1,14 @@
 const client = require('../index');
 const { upperFirst } = require('lodash');
 
-const { shortenURL, fetchCard, fetchReprints, getCardLink, getSet, rarityFix } = require('./fetch');
+const { shortenURL, fetchCard, fetchErrata, fetchReprints, getCardLink, getSet, rarityFix } = require('./fetch');
 
 const card = async (target, context, params, flags) => {
 	const data = await fetchCard(params.join(' ').toLowerCase(), flags);
 	Promise.all([data]).then(async ([data]) => {
 		if(data) {
 			const link = await shortenURL(getCardLink(data));
+			const errata = fetchErrata(data);
 			const msg = [
 				'card_title',
 				'expansion',
@@ -32,7 +33,7 @@ const card = async (target, context, params, flags) => {
 							return `• ${data[type]}`;
 						break;
 					case 'card_text':
-						return `${data[type]}`;
+						return `• ${errata ? errata.card_text : data[type]}`;
 					case 'expansion':
 					    const reprints = fetchReprints(data, flags);
 						return reprints.map(x => `${getSet(x.expansion)} (${x.card_number})`).join(' • ') + ' • ';

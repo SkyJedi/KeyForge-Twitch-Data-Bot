@@ -1,11 +1,11 @@
 const axios = require('axios');
 const Fuse = require('fuse.js');
-const { db } = require('./firestore');
+const {db} = require('./firestore');
 const uuid = require('uuid').v4;
-const { get, sortBy, round, filter, findIndex, shuffle, uniqBy } = require('lodash');
+const {get, sortBy, round, filter, find, findIndex, shuffle, uniqBy} = require('lodash');
 const faq = require('../card_data/faq');
-const { deckSearchAPI, dokAPI, dokKey, bitlyKey } = require('../config');
-const { sets, langs, houses } = require('../card_data');
+const {deckSearchAPI, dokAPI, dokKey, bitlyKey} = require('../config');
+const {sets, langs, houses, erratas} = require('../card_data');
 const deckIdRegex = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/;
 
 const fetchDeck = (params) => new Promise((resolve, reject) => {
@@ -15,7 +15,7 @@ const fetchDeck = (params) => new Promise((resolve, reject) => {
 const fetchDeckId = (id) => new Promise((resolve, reject) => {
     db.collection('decks').doc(id).get()
         .then(doc => {
-            if(doc.exists) {
+            if (doc.exists) {
                 const deck = doc.data();
                 deck.houses = get(deck, '_links.houses');
                 buildCardList(deck).then(cards => {
@@ -34,7 +34,7 @@ const fetchDeckIdMV = (id) => new Promise((resolve, reject) => {
     axios.get(encodeURI(deckSearchAPI + id))
         .then(response => {
             const deck = get(response, 'data.data', false);
-            if(deck) {
+            if (deck) {
                 db.collection('decks').doc(deck.id).set(deck).catch(console.error);
                 deck.houses = get(deck, '_links.houses');
                 buildCardList(deck).then(cards => {
@@ -49,7 +49,7 @@ const fetchDeckNameMV = (name) => new Promise((resolve, reject) => {
         .then(response => {
             const index = findIndex(response.data.data, x => x.name.toLowerCase() === name);
             const deck = get(response, `data.data[${Math.max(index, 0)}]`, false);
-            if(deck) {
+            if (deck) {
                 deck.houses = get(deck, '_links.houses');
                 buildCardList(deck).then(cards => {
                     deck.cards = cards;
@@ -67,8 +67,8 @@ const buildCardList = (deck) => new Promise(resolve => {
     return db.runTransaction(transaction => {
         return transaction.getAll(...cardRefs).then(docs => {
             let list = [];
-            for(let x = 0; x < docs.length; x++) {
-                if(docs[x].exists) {
+            for (let x = 0; x < docs.length; x++) {
+                if (docs[x].exists) {
                     let card = docs[x].data();
                     card.is_legacy = deck.set_era_cards.Legacy.includes(card.id);
                     list.push(card);
@@ -101,13 +101,13 @@ const fetchMavCard = (name, house) => new Promise((resolve, reject) => {
         .where('card_title', '==', name)
         .where('house', '==', house)
         .get().then(snapshot => {
-        if(snapshot.size > 0) snapshot.forEach(doc => resolve(doc.data()));
+        if (snapshot.size > 0) snapshot.forEach(doc => resolve(doc.data()));
         else reject();
     }).catch(() => reject());
 });
 const fetchDeckWithCard = (cardId) => new Promise((resolve, reject) => {
     db.collection('decks').limit(10).where('cards', 'array-contains', cardId).get().then(snapshot => {
-        if(snapshot.size > 0) {
+        if (snapshot.size > 0) {
             let deck = [];
             snapshot.forEach(doc => deck.push(doc.data()));
             deck = shuffle(deck)[0];
@@ -122,14 +122,14 @@ const fetchDeckWithCard = (cardId) => new Promise((resolve, reject) => {
 const fetchRandomDecks = (expansion) => new Promise((resolve, reject) => {
     const key = uuid();
     let decksRef = db.collection('decks').limit(1);
-    if(expansion) decksRef = decksRef.where('expansion', '==', expansion);
+    if (expansion) decksRef = decksRef.where('expansion', '==', expansion);
     decksRef.where('id', '>=', key).get()
         .then(snapshot => {
-            if(snapshot.size > 0) snapshot.forEach(doc => resolve(doc.data()));
+            if (snapshot.size > 0) snapshot.forEach(doc => resolve(doc.data()));
             else {
                 decksRef.where('id', '<', key).get()
                     .then(snapshot => {
-                        if(snapshot.size > 0) snapshot.forEach(doc => resolve(doc.data()));
+                        if (snapshot.size > 0) snapshot.forEach(doc => resolve(doc.data()));
                         else resolve(false);
                     }).catch(console.error);
             }
@@ -140,17 +140,13 @@ const fetchDoK = (deckID) => {
     return new Promise(resolve => {
         axios.get(`${dokAPI}${deckID}`, dokKey)
             .then(response => {
-                if(response.data) {
+                if (response.data) {
                     const {
-                            amberControl: A = 0, expectedAmber: E = 0,
-                            artifactControl: R = 0, creatureControl: C = 0,
-                            efficiency: F = 0, disruption: D = 0, effectivePower: P = 0,
                             sasRating = 0, sasPercentile = 0, aercScore = 0
                         } = response.data.deck,
-                        sas = `${round(sasRating, 2)} SAS • ${round(aercScore, 2)} AERC`,
-                        deckAERC = `A: ${round(A, 2)} • E: ${round(E, 2)} • R: ${round(R, 2)} • C: ${round(C, 2)} • F: ${round(F, 2)} • D: ${round(D, 2)} • P: ${round(P, 2)}`,
+                        sas = `${round(sasRating, 2)}SAS • ${round(aercScore, 2)}AERC`,
                         sasStar = sasStarRating(sasPercentile);
-                    resolve({ sas, deckAERC, sasStar });
+                    resolve({sas, sasStar});
                 } else resolve({
                     sas: 'Unable to Retrieve SAS',
                     deckAERC: 'Unable to Retrieve AERC',
@@ -193,8 +189,8 @@ const fetchFAQ = (text) => {
         includeScore: true,
         threshold: 0.3,
         keys: [
-            { name: 'question', weight: 0.6 },
-            { name: 'answer', weight: 0.4 },
+            {name: 'question', weight: 0.6},
+            {name: 'answer', weight: 0.4},
         ],
     };
     const fuse = new Fuse(faq, options);
@@ -206,6 +202,10 @@ const fetchReprints = (card, flags) => {
     const lang = getFlagLang(flags);
     const cards = require(`../card_data/`)[lang];
     return uniqBy(cards.filter(x => x.card_title === card.card_title), 'card_number');
+};
+
+const fetchErrata = (card) => {
+    return find(erratas, ['card_title', card.card_title]);
 };
 
 const sasStarRating = (x) => {
@@ -251,7 +251,7 @@ const getFlagNumber = (flags, defaultNumber = 0) => +(get(filter(flags, flag => 
 const shortenURL = (url) => {
     return new Promise(resolve => {
         axios.post('https://api-ssl.bitly.com/v4/shorten',
-            { long_url: url, domain: 'skyj.io' }, bitlyKey)
+            {long_url: url, domain: 'skyj.io'}, bitlyKey)
             .then(response => resolve(get(response, 'data.id', url)))
             .catch(() => resolve(''));
     });
@@ -263,21 +263,22 @@ const format = (text) => {
     return text;
 };
 
+exports.fetchCard = fetchCard;
 exports.fetchDeck = fetchDeck;
 exports.fetchDeckWithCard = fetchDeckWithCard;
-exports.fetchMavCard = fetchMavCard;
-exports.fetchCard = fetchCard;
 exports.fetchDoK = fetchDoK;
+exports.fetchErrata = fetchErrata;
 exports.fetchFAQ = fetchFAQ;
-exports.fetchUnknownCard = fetchUnknownCard;
+exports.fetchMavCard = fetchMavCard;
 exports.fetchRandomDecks = fetchRandomDecks;
 exports.fetchReprints = fetchReprints;
-exports.getSet = getSet;
-exports.getCardLink = getCardLink;
-exports.getFlagLang = getFlagLang;
-exports.getFlagSet = getFlagSet;
-exports.getFlagHouse = getFlagHouse;
-exports.getFlagNumber = getFlagNumber;
-exports.shortenURL = shortenURL;
-exports.rarityFix = rarityFix;
+exports.fetchUnknownCard = fetchUnknownCard;
 exports.format = format;
+exports.getCardLink = getCardLink;
+exports.getFlagHouse = getFlagHouse;
+exports.getFlagLang = getFlagLang;
+exports.getFlagNumber = getFlagNumber;
+exports.getFlagSet = getFlagSet;
+exports.getSet = getSet;
+exports.rarityFix = rarityFix;
+exports.shortenURL = shortenURL;
