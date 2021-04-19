@@ -1,11 +1,13 @@
 const axios = require('axios');
 const Fuse = require('fuse.js');
-const {db} = require('./firestore');
-const uuid = require('uuid').v4;
-const {get, sortBy, round, filter, find, findIndex, shuffle, uniqBy} = require('lodash');
+const { v4: uuid } = require('uuid');
+const levenshtein = require('js-levenshtein');
+
+const { get, sortBy, round, filter, find, findIndex, shuffle, uniqBy } = require('lodash');
+const { db } = require('./firestore');
 const faq = require('../card_data/faq');
-const {deckSearchAPI, dokAPI, dokKey, bitlyKey} = require('../config');
-const {sets, langs, houses, erratas} = require('../card_data');
+const { deckSearchAPI, dokAPI, dokKey, bitlyKey } = require('../config');
+const { langs, sets, houses, cardTypes, erratas } = require('../card_data');
 const deckIdRegex = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/;
 
 const fetchDeck = (params) => new Promise((resolve, reject) => {
@@ -146,7 +148,7 @@ const fetchDoK = (deckID) => {
                         } = response.data.deck,
                         sas = `${round(sasRating, 2)}SAS • ${round(aercScore, 2)}AERC`,
                         sasStar = sasStarRating(sasPercentile);
-                    resolve({sas, sasStar});
+                    resolve({ sas, sasStar });
                 } else resolve({
                     sas: 'Unable to Retrieve SAS',
                     deckAERC: 'Unable to Retrieve AERC',
@@ -160,27 +162,56 @@ const fetchDoK = (deckID) => {
     });
 };
 
-const fetchCard = (search, flags) => {
-    const set = getFlagSet(flags),
-        lang = getFlagLang(flags);
+const fetchCard = (search, flags = []) => {
+    const set = getFlagSet(flags);
+    const lang = getFlagLang(flags);
+    const house = getFlagHouse(flags);
     const options = {
         shouldSort: true,
         tokenize: true,
         matchAllTokens: true,
+        includeScore: true,
         threshold: 0.2,
-        keys: [{
-            name: 'card_number',
-            weight: 0.3
-        }, {
-            name: 'card_title',
-            weight: 0.7
-        }],
+        keys: [
+            {
+                name: 'card_number',
+                weight: 0.3
+            }, {
+                name: 'card_title',
+                weight: 0.7
+            }]
     };
-    const cards = (set ? require(`../card_data/${lang}/${set}`) : require(`../card_data/`)[lang]);
+    let cards = (set ? require(`../card_data/${lang}/${set}`) : require(`../card_data/`)[lang]);
+
+    if (house.length > 0) {
+        cards = cards.filter(x => x.house === house);
+    }
+
+    if (search.includes('evil twin')) {
+        search = search.replace('evil twin', '').trim();
+        flags = flags.concat('et');
+    }
+
     const fuse = new Fuse(cards, options);
-    const final = fuse.search(search);
-    return get(final, '[0]');
+    let results = fuse.search(search);
+    if (0 >= results.length) return;
+    results = results.filter(result => result.score === results[0].score);
+    results = results.map(result => {
+        result.score = levenshtein(result.item.card_title, search);
+        return result;
+    });
+    results = sortBy(results, ['score']);
+    let final = get(results, '[0].item');
+    if (final) {
+        final = cards.filter(x => x.card_title === final.card_title);
+        if (flags.includes('et')) {
+            final = final.filter(x => x.rarity === 'Evil Twin');
+        }
+        final = sortBy(final, 'expansion').reverse()[0];
+    }
+    return final;
 };
+
 const fetchFAQ = (text) => {
     const options = {
         shouldSort: true,
@@ -189,9 +220,9 @@ const fetchFAQ = (text) => {
         includeScore: true,
         threshold: 0.3,
         keys: [
-            {name: 'question', weight: 0.6},
-            {name: 'answer', weight: 0.4},
-        ],
+            { name: 'question', weight: 0.6 },
+            { name: 'answer', weight: 0.4 }
+        ]
     };
     const fuse = new Fuse(faq, options);
     let results = fuse.search(text);
@@ -237,21 +268,25 @@ const sasStarRating = (x) => {
     }
 };
 
-const getSet = (number) => get(sets.filter(set => number === set.set_number), '[0].flag', 'ERROR');
 const getCardLink = (card) => {
     const AllCards = require(`../card_data/en/${card.expansion}`);
     card = AllCards.find(x => x.card_number === card.card_number);
-    return encodeURI(`https://archonarcana.com/${card.card_title.replace(' ', '_').replace(/[\[\]']+/g, '')}?powered_by=archonMatrixDiscord`);
+    return encodeURI(`https://archonarcana.com/${card.card_title.replace(/\s+/g, '_')
+        .replace(/[\[\]']+/g, '')}${card.rarity === 'Evil Twin' ? '_(Evil_Twin)' : ''}?powered_by=archonMatrixDiscord`);
 };
-const getFlagSet = (flags) => get(filter(sets, set => flags.includes(set.flag.toLowerCase())), '[0].set_number');
-const getFlagHouse = (flags) => houses[filter(Object.keys(houses), house => flags.includes(house))];
-const getFlagLang = (flags) => get(filter(flags, flag => langs.includes(flag)), '[0]', 'en');
-const getFlagNumber = (flags, defaultNumber = 0) => +(get(filter(flags, flag => Number.isInteger(+flag)), '[0]', defaultNumber));
+
+const getFlagCardType = (flags = []) => get(filter(cardTypes, cardType => flags.includes(cardType.toLowerCase())), '[0]');
+const getFlagSet = (flags = []) => get(filter(sets, set => flags.includes(set.flag.toLowerCase())), '[0].set_number');
+const getSet = (number = []) => get(sets.filter(set => number === set.set_number), '[0].flag', 'ERROR');
+const getFlagHouse = (flags = []) => get(flags.filter(x => Object.keys(houses).includes(x)).map(x => houses[x]).sort(), '[0]', []);
+const getFlagLang = (flags = []) => get(filter(flags, flag => langs.includes(flag)), '[0]', 'en');
+const getFlagNumber = (
+    flags = [], defaultNumber = 0) => +(get(filter(flags, flag => Number.isInteger(+flag)), '[0]', defaultNumber));
 
 const shortenURL = (url) => {
     return new Promise(resolve => {
         axios.post('https://api-ssl.bitly.com/v4/shorten',
-            {long_url: url, domain: 'skyj.io'}, bitlyKey)
+            { long_url: url, domain: 'skyj.io' }, bitlyKey)
             .then(response => resolve(get(response, 'data.id', url)))
             .catch(() => resolve(''));
     });
